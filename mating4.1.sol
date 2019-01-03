@@ -20,6 +20,7 @@ contract Mating {
         uint[] giveServiceScore;
         uint servicekind;
         uint selfIntroVersion;
+        uint washingIndex;
         string phoneNumber;
         string secret;
         string id;
@@ -340,6 +341,8 @@ contract Mating {
             }
         }
         washing100 = highest * 100 / (washing100 + 1);//防除以0;
+        ToolMan storage tool = toolman[addr];
+        tool.washingIndex = washing100;
         if (washing100 > 50 ){
             washingAddress.push(addr);
         }
@@ -379,7 +382,7 @@ contract Mating {
         uint[] memory meanGiveDating,
         uint datingPrice,
         uint gender,
-        bool isfriend,
+        uint washingIndex,
         uint bidFriendFee,
         string memory id
         ) {
@@ -391,7 +394,7 @@ contract Mating {
         meanGiveDating = tool.giveDaingScore;
         datingPrice = tool.datingPrice;
         gender = tool.gender;
-        isfriend = friends[msg.sender][addr];
+        washingIndex = tool.washingIndex;
         bidFriendFee = friendRequest[addr][msg.sender]; //疑似疑似寫反
         id=tool.id;
     }
