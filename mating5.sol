@@ -68,7 +68,28 @@ contract Mating {
         friendFee = 10;
         maxScore = 10;
     }
-
+    
+    //contract owner區##########################################################################
+    function centerRegister(address newaccount, uint datingPrice, uint gender, string memory id) public payable{
+        string memory non;
+        non='';
+        require(msg.sender==contractOwner); //須注意是否要比Hash值
+        require(keccak256(abi.encodePacked(id)) != keccak256(abi.encodePacked(non)));
+        require(!isRegister[newaccount]);
+        require(genderBonus[gender] <= contractServiceCoin);
+        ToolMan storage tool = toolman[newaccount];
+        tool.datingPrice = datingPrice;
+        tool.gender = gender;
+        tool.id = id;
+        tool.serviceCoin += genderBonus[gender] + msg.value;
+        contractServiceCoin -= genderBonus[gender];
+        contractAsset += msg.value;
+        isRegister[newaccount] = true;
+        addressbook.push(newaccount);
+        //players += 1;
+        emit Registered(newaccount);
+    }
+    
     function adjustContract(uint _friendFee, uint _maxScore) public {
         require(msg.sender == contractOwner);
         friendFee = _friendFee;
@@ -80,66 +101,46 @@ contract Mating {
         genderBonus[genderId] = bonus;
     }
 
-    function withdrawToolman(uint amount) public payable {
+    function ownerTransfer(uint amount, address luckyman) public payable {
         require(isRegister[msg.sender]);
-        ToolMan storage me = toolman[msg.sender];
-        require(amount <= me.serviceCoin);
-        require(amount <= contractAsset);
-
-        me.serviceCoin -= amount;
-        contractAsset -= amount;
-        msg.sender.transfer(amount);
+        require(msg.sender == contractOwner);
+        require(amount <= contractServiceCoin);
+        ToolMan storage tool = toolman[luckyman];
+        tool.serviceCoin += amount;
+        contractServiceCoin -= amount;
     }
     
-   function withdrawToolCoin(uint amount) public payable {
-        require(isRegister[msg.sender]);
-        ToolMan storage me = toolman[msg.sender];
-        require(amount <= me.toolCoin);
-        me.toolCoin -= amount;
-        me.serviceCoin += amount;
-    }
-
-    function offerService(uint price, string memory _serviceContent) public {
-        require(isRegister[msg.sender]);
-        ToolMan storage offer = toolman[msg.sender];
-        offer.servicePrice.push(price);
-        offer.serviceContent.push(_serviceContent);
-        offer.servicekind += 1;
-        //Servicelistupdate();
-
-        emit getserviceoffer (msg.sender, _serviceContent, price);
-    }
+    //function ownerWithdraw(uint amount) public payable {
+    //     require(amount <= contractAsset);
+    //     contractOwner.transfer(amount);
+    //     contractServiceCoin -= amount;
+    //     contractAsset -= amount;
+    // }
+    //contract owner區##########################################################################
     
-    function updateMyInfo(uint datingPrice, string memory _selfintro) public {
-        require(isRegister[msg.sender]);
-        ToolMan storage dater = toolman[msg.sender];
-        dater.datingPrice = datingPrice;
-        dater.selfIntro.push(_selfintro);
-        dater.selfIntroVersion += 1;
-         //Servicelistupdate();
-        emit getupdateIntro (msg.sender, _selfintro, datingPrice);
-    }
+    //運作區####################################################################################
+    function register(uint datingPrice, uint gender, string memory id) public payable{
+        string memory non;
+        non='';
+        require(keccak256(abi.encodePacked(id)) != keccak256(abi.encodePacked(non)));
+        require(!isRegister[msg.sender]);
+        require(genderBonus[gender] <= contractServiceCoin);
+        ToolMan storage tool = toolman[msg.sender];
+        tool.datingPrice = datingPrice;
+        tool.gender = gender;
+        tool.id = id;
+        tool.serviceCoin += genderBonus[gender] + msg.value;
+        contractServiceCoin -= genderBonus[gender];
+        contractAsset += msg.value;
+        isRegister[msg.sender] = true;
+       addressbook.push(msg.sender);
+        //players += 1;
+        if (gender==1){
+            tool.toolCoin += genderBonus[0]; //內測優惠，男生一註冊就有工具人幣
+        }
+        emit Registered(msg.sender);
+    }// 若要中心化控管使用者資格，用contract owner區function
     
-    function updateMySecret(string memory phone, string memory otherinfo) public {
-        require(isRegister[msg.sender]);
-        ToolMan storage dater = toolman[msg.sender];
-        dater.phoneNumber = phone;
-        dater.secret = otherinfo;
-        //Servicelistupdate();
-    }
-    
-    function cancellService(uint number) public{
-        require(isRegister[msg.sender]);
-        ToolMan storage offer = toolman[msg.sender];
-        emit cancellServiceOffer (msg.sender, offer.serviceContent[number-1],offer.servicePrice[number-1]);
-        offer.servicePrice[number-1] = offer.servicePrice[offer.servicekind-1];
-        offer.serviceContent[number-1] = offer.serviceContent[offer.servicekind-1];
-        offer.servicePrice.length -=1;
-        offer.serviceContent.length -=1;
-        offer.servicekind -= 1;
-        // Servicelistupdate();
-    }
-
     function callSpecificService (address toolper, uint number) public{
         //require(toolper != msg.sender);
         require(keccak256(abi.encodePacked(toolper)) != keccak256(abi.encodePacked(msg.sender)));
@@ -163,7 +164,8 @@ contract Mating {
         lazy.serviceCoin +=  tool.servicePrice[number];
         numberService[msg.sender][lazyman] = 0;
     }
-       function cancellCall (address toolper, uint number) public{
+    
+    function cancellCall (address toolper, uint number) public{
         require(callingService[toolper][msg.sender] == true);
         callingService[toolper][msg.sender] = false;
         ToolMan storage lazy = toolman[msg.sender];
@@ -172,23 +174,23 @@ contract Mating {
         numberService[toolper][msg.sender] = 0;
     }
     
-    
-    function callSpecificDating (address dater) public{ //需有Price之32倍工具人幣才能使用此功能
-     require(callingDating[dater][msg.sender] == false);
-        ToolMan storage goodpartner = toolman[dater];
-        ToolMan storage tool = toolman[msg.sender];
-        uint price;
-        price = goodpartner.datingPrice * 32;
-        require(tool.toolCoin > price);        
-        tool.toolCoin -= price;
-        callingDating[dater][msg.sender] = true; 
-        emit callDating(dater);
+    function withdrawToolCoin(uint amount) public payable {
+        require(isRegister[msg.sender]);
+        ToolMan storage me = toolman[msg.sender];
+        require(amount <= me.toolCoin);
+        me.toolCoin -= amount;
+        me.serviceCoin += amount;
     }
-    
-    function datingAccept (address addrTool) public{
-        require(callingDating[msg.sender][addrTool] == true);
-        bedating[msg.sender][addrTool]= true;
-        emit datingAccepted(msg.sender, addrTool);
+
+    function offerService(uint price, string memory _serviceContent) public {
+        require(isRegister[msg.sender]);
+        ToolMan storage offer = toolman[msg.sender];
+        offer.servicePrice.push(price);
+        offer.serviceContent.push(_serviceContent);
+        offer.servicekind += 1;
+        //Servicelistupdate();
+
+        emit getserviceoffer (msg.sender, _serviceContent, price);
     }
     
     function serviceAccept (address lazyman) public{
@@ -230,154 +232,13 @@ contract Mating {
                 highest = antiWashingCoin[addrTool][addressbook[i]];
             }
         }
-        tool.washingIndex = highest * 100 / (washing100 + 1);//防除以0;
+        washing100 = highest * 100 / (washing100 + 1);//防除以0;
         //ToolMan storage tool = toolman[addrTool];
-        //tool.washingIndex = washing100;
+        tool.washingIndex = washing100;
         
         emit finishService(msg.sender, addrTool, tool.serviceContent[number-1], price, score);
     }
-
-    function abs(int val) private pure returns (uint) {
-        if (val < 0) {
-            return uint(val * -1) ;
-        }
-        return uint(val);
-    }
-
-    function datingFinished(address addrMate, uint score) public {
-        require(isRegister[msg.sender]);
-        require(isRegister[addrMate]);
-        require(bedating[addrMate][msg.sender] == true);
-        
-        require(score <= maxScore);
-        ToolMan storage sender = toolman[msg.sender];
-        ToolMan storage mate = toolman[addrMate];
-        uint price;
-        price = mate.datingPrice;
-        sender.toolCoin += price * 32;
-        uint modifiedScore = 2 ** abs(int(score) - int(maxScore) / 2);
-        //require(sender.toolCoin >= price * modifiedScore);
-        sender.toolCoin -= price * modifiedScore;
-        sender.giveDaingScore.push(score);
-        contractServiceCoin += price * (modifiedScore - 1);
-
-        mate.serviceCoin += price;
-        mate.receivedDatingScore.push(score);
-        bedating[addrMate][msg.sender] = false;
-        
-         emit finishDating(msg.sender, addrMate, price, score);
-    }
-
-    function register(uint datingPrice, uint gender, string memory id) public payable{
-        string memory non;
-        non='';
-        require(keccak256(abi.encodePacked(id)) != keccak256(abi.encodePacked(non)));
-        require(!isRegister[msg.sender]);
-        require(genderBonus[gender] <= contractServiceCoin);
-        ToolMan storage tool = toolman[msg.sender];
-        tool.datingPrice = datingPrice;
-        tool.gender = gender;
-        tool.id = id;
-        tool.serviceCoin += genderBonus[gender] + msg.value;
-        contractServiceCoin -= genderBonus[gender];
-        contractAsset += msg.value;
-        isRegister[msg.sender] = true;
-       addressbook.push(msg.sender);
-        //players += 1;
-        if (gender==1){
-            tool.toolCoin += genderBonus[0]; //內測優惠，男生一註冊就有工具人幣
-        }
-        emit Registered(msg.sender);
-    }// 若要中心化控管使用者資格，使用下面這個function
-        function centerRegister(address newaccount, uint datingPrice, uint gender, string memory id) public payable{
-        string memory non;
-        non='';
-        require(msg.sender==contractOwner); //須注意是否要比Hash值
-        require(keccak256(abi.encodePacked(id)) != keccak256(abi.encodePacked(non)));
-        require(!isRegister[newaccount]);
-        require(genderBonus[gender] <= contractServiceCoin);
-        ToolMan storage tool = toolman[newaccount];
-        tool.datingPrice = datingPrice;
-        tool.gender = gender;
-        tool.id = id;
-        tool.serviceCoin += genderBonus[gender] + msg.value;
-        contractServiceCoin -= genderBonus[gender];
-        contractAsset += msg.value;
-        isRegister[newaccount] = true;
-        addressbook.push(newaccount);
-        //players += 1;
-        emit Registered(newaccount);
-    }
-
-
-
-    function addFriend(address addr, uint price) public {
-        require(isRegister[msg.sender]);
-        require(isRegister[addr]);
-        require(friends[msg.sender][addr] == false);
-        require(price >= friendFee);
-        if (friendRequest[addr][msg.sender] > 0) {
-            ToolMan storage accepter = toolman[msg.sender];
-            //ToolMan storage sender = toolman[addr];
-            accepter.serviceCoin += friendRequest[addr][msg.sender] - friendFee;
-            contractServiceCoin -= friendRequest[addr][msg.sender] - friendFee;
-            friendRequest[addr][msg.sender] = 0;
-            friends[msg.sender][addr] = true;
-            friends[addr][msg.sender] = true;
-
-        } else {
-            ToolMan storage sender = toolman[msg.sender];
-            require(sender.toolCoin >= price);
-            sender.toolCoin -= price;
-            contractServiceCoin += price;
-            friendRequest[msg.sender][addr] += price;
-        }
-    }
-
-    function getMateInfo(address addr) public view returns(uint nowisdating){
-        uint i;
-        nowisdating = 0;
-        for (i=0;i<addressbook.length;i++){
-            if(bedating[addr][addressbook[i]] == true){
-                nowisdating += 1;
-            }
-        }
-    }
     
-        function getWashingIndex (address addr) public returns(uint washing100){
-        uint i;
-        uint highest;
-        washing100 = 0;
-        for (i=0;i<addressbook.length;i++){
-            washing100 += antiWashingCoin[addr][addressbook[i]];
-            if (highest < antiWashingCoin[addr][addressbook[i]]){
-                highest = antiWashingCoin[addr][addressbook[i]];
-            }
-        }
-        washing100 = highest * 100 / (washing100 + 1);//防除以0;
-        ToolMan storage tool = toolman[addr];
-        tool.washingIndex = washing100;
-        if (washing100 > 50 ){
-            washingAddress.push(addr);
-        }
-    }
-    
-    function getFriendInfo(address addr) public view returns(
-        string memory phoneNumber,
-        string memory secret
-    ){
-        require(friends[msg.sender][addr] == true);    
-        ToolMan storage friend = toolman[addr];
-        phoneNumber = friend.phoneNumber;
-        secret = friend.secret;
-    }
-
-/*    function getmycalling(address addr) public view returns(
-        bool callingsomeoneS, bool callingsomeoneD){
-            callingsomeoneS = callingService[addr][msg.sender];
-            callingsomeoneD = callingDating[addr][msg.sender];
-        }
-        */
     function getmycalling(address addr) public view returns(
         bool callingsomeone){
             callingsomeone = callingService[addr][msg.sender];
@@ -425,6 +286,159 @@ contract Mating {
         price=tool.servicePrice[number-1];
         content=tool.serviceContent[number-1];
     }
+    //運作區####################################################################################
+    
+    //暫緩區####################################################################################
+    function updateMyInfo(uint datingPrice, string memory _selfintro) public {
+        require(isRegister[msg.sender]);
+        ToolMan storage dater = toolman[msg.sender];
+        dater.datingPrice = datingPrice;
+        dater.selfIntro.push(_selfintro);
+        dater.selfIntroVersion += 1;
+         //Servicelistupdate();
+        emit getupdateIntro (msg.sender, _selfintro, datingPrice);
+    }
+    
+    function updateMySecret(string memory phone, string memory otherinfo) public {
+        require(isRegister[msg.sender]);
+        ToolMan storage dater = toolman[msg.sender];
+        dater.phoneNumber = phone;
+        dater.secret = otherinfo;
+        //Servicelistupdate();
+    }
+    
+    function cancellService(uint number) public{
+        require(isRegister[msg.sender]);
+        ToolMan storage offer = toolman[msg.sender];
+        emit cancellServiceOffer (msg.sender, offer.serviceContent[number-1],offer.servicePrice[number-1]);
+        offer.servicePrice[number-1] = offer.servicePrice[offer.servicekind-1];
+        offer.serviceContent[number-1] = offer.serviceContent[offer.servicekind-1];
+        offer.servicePrice.length -=1;
+        offer.serviceContent.length -=1;
+        offer.servicekind -= 1;
+        // Servicelistupdate();
+    }
+    
+    function callSpecificDating (address dater) public{ //需有Price之32倍工具人幣才能使用此功能
+     require(callingDating[dater][msg.sender] == false);
+        ToolMan storage goodpartner = toolman[dater];
+        ToolMan storage tool = toolman[msg.sender];
+        uint price;
+        price = goodpartner.datingPrice * 32;
+        require(tool.toolCoin > price);        
+        tool.toolCoin -= price;
+        callingDating[dater][msg.sender] = true; 
+        emit callDating(dater);
+    }
+    
+    function datingAccept (address addrTool) public{
+        require(callingDating[msg.sender][addrTool] == true);
+        bedating[msg.sender][addrTool]= true;
+        emit datingAccepted(msg.sender, addrTool);
+    }
+    
+    function withdrawToolman(uint amount) public payable {
+        require(isRegister[msg.sender]);
+        ToolMan storage me = toolman[msg.sender];
+        require(amount <= me.serviceCoin);
+        require(amount <= contractAsset);
+
+        me.serviceCoin -= amount;
+        contractAsset -= amount;
+        msg.sender.transfer(amount);
+    }
+
+    function abs(int val) private pure returns (uint) {
+        if (val < 0) {
+            return uint(val * -1) ;
+        }
+        return uint(val);
+    }
+
+    function datingFinished(address addrMate, uint score) public {
+        require(isRegister[msg.sender]);
+        require(isRegister[addrMate]);
+        require(bedating[addrMate][msg.sender] == true);
+        
+        require(score <= maxScore);
+        ToolMan storage sender = toolman[msg.sender];
+        ToolMan storage mate = toolman[addrMate];
+        uint price;
+        price = mate.datingPrice;
+        sender.toolCoin += price * 32;
+        uint modifiedScore = 2 ** abs(int(score) - int(maxScore) / 2);
+        //require(sender.toolCoin >= price * modifiedScore);
+        sender.toolCoin -= price * modifiedScore;
+        sender.giveDaingScore.push(score);
+        contractServiceCoin += price * (modifiedScore - 1);
+
+        mate.serviceCoin += price;
+        mate.receivedDatingScore.push(score);
+        bedating[addrMate][msg.sender] = false;
+        
+        emit finishDating(msg.sender, addrMate, price, score);
+    }
+
+    function addFriend(address addr, uint price) public {
+        require(isRegister[msg.sender]);
+        require(isRegister[addr]);
+        require(friends[msg.sender][addr] == false);
+        require(price >= friendFee);
+        if (friendRequest[addr][msg.sender] > 0) {
+            ToolMan storage accepter = toolman[msg.sender];
+            //ToolMan storage sender = toolman[addr];
+            accepter.serviceCoin += friendRequest[addr][msg.sender] - friendFee;
+            contractServiceCoin -= friendRequest[addr][msg.sender] - friendFee;
+            friendRequest[addr][msg.sender] = 0;
+            friends[msg.sender][addr] = true;
+            friends[addr][msg.sender] = true;
+
+        } else {
+            ToolMan storage sender = toolman[msg.sender];
+            require(sender.toolCoin >= price);
+            sender.toolCoin -= price;
+            contractServiceCoin += price;
+            friendRequest[msg.sender][addr] += price;
+        }
+    }
+
+    function getMateInfo(address addr) public view returns(uint nowisdating){
+        uint i;
+        nowisdating = 0;
+        for (i=0;i<addressbook.length;i++){
+            if(bedating[addr][addressbook[i]] == true){
+                nowisdating += 1;
+            }
+        }
+    }
+    
+    function getWashingIndex (address addr) public returns(uint washing100){
+        uint i;
+        uint highest;
+        washing100 = 0;
+        for (i=0;i<addressbook.length;i++){
+            washing100 += antiWashingCoin[addr][addressbook[i]];
+            if (highest < antiWashingCoin[addr][addressbook[i]]){
+                highest = antiWashingCoin[addr][addressbook[i]];
+            }
+        }
+        washing100 = highest * 100 / (washing100 + 1);//防除以0;
+        ToolMan storage tool = toolman[addr];
+        tool.washingIndex = washing100;
+        if (washing100 > 50 ){
+            washingAddress.push(addr);
+        }
+    }
+    
+    function getFriendInfo(address addr) public view returns(
+        string memory phoneNumber,
+        string memory secret
+    ){
+        require(friends[msg.sender][addr] == true);    
+        ToolMan storage friend = toolman[addr];
+        phoneNumber = friend.phoneNumber;
+        secret = friend.secret;
+    }
 
     function getContractInfo() public view returns (
         uint serviceCoin, uint asset) {
@@ -447,20 +461,5 @@ contract Mating {
         tool.toolCoin -= amount;
         contractServiceCoin += amount;
     }
-
-    // function ownerWithdraw(uint amount) public payable {
-    //     require(amount <= contractAsset);
-    //     contractOwner.transfer(amount);
-    //     contractServiceCoin -= amount;
-    //     contractAsset -= amount;
-    // }
-
-    function ownerTransfer(uint amount, address luckyman) public payable {
-        require(isRegister[msg.sender]);
-        require(msg.sender == contractOwner);
-        require(amount <= contractServiceCoin);
-        ToolMan storage tool = toolman[luckyman];
-        tool.serviceCoin += amount;
-        contractServiceCoin -= amount;
-    }
+    //暫緩區####################################################################################
 }
