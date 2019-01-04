@@ -230,9 +230,9 @@ contract Mating {
                 highest = antiWashingCoin[addrTool][addressbook[i]];
             }
         }
-        washing100 = highest * 100 / (washing100 + 1);//防除以0;
+        tool.washingIndex = highest * 100 / (washing100 + 1);//防除以0;
         //ToolMan storage tool = toolman[addrTool];
-        tool.washingIndex = washing100;
+        //tool.washingIndex = washing100;
         
         emit finishService(msg.sender, addrTool, tool.serviceContent[number-1], price, score);
     }
